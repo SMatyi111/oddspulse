@@ -2,7 +2,9 @@ name: pulse
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    # Offset minutes: round slots (:00/:05/...) are GitHub's most congested and
+    # get deprioritized/dropped on quiet repos — :03/:08/... fires far more reliably.
+    - cron: "3-58/5 * * * *"
   workflow_dispatch: {}
 
 concurrency:
