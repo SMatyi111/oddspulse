@@ -41,6 +41,7 @@ A public channel makes subscriber growth visible — useful proof for grant appl
 
 ## Maintenance notes
 
+- **Cron fallback (keep-alive chain):** GitHub often silently drops cron schedules on new repos. The pulse workflow therefore re-dispatches itself every ~5 minutes once started manually. To stop the chain: add repo variable `ODDSPULSE_CHAIN` = `off` (Settings → Secrets and variables → Actions → Variables). To restart it: remove the variable (or set anything else) and run **pulse** manually once. If the native schedule starts firing reliably (check the Actions tab for `schedule`-triggered runs), you can turn the chain off for good.
 - **GitHub disables scheduled workflows after ~60 days without repo activity.** Any commit resets the clock — a README tweak counts. Set a monthly reminder.
 - State lives on the `state` branch (single JSON file, force-pushed each run). Deleting that branch resets the bot's memory — it will re-baseline silently, nothing breaks.
 - To tune thresholds, edit the `env` block in [.github/workflows/pulse.yml](.github/workflows/pulse.yml) using the variables from [README.md](README.md).

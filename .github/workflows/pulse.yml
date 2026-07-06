@@ -13,6 +13,7 @@ concurrency:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   pulse:
@@ -44,3 +45,16 @@ jobs:
           tree=$(printf '100644 blob %s\tstate.json\n' "$blob" | git mktree)
           commit=$(git commit-tree "$tree" -m "state $(date -u +%FT%TZ)")
           git push -f origin "$commit:refs/heads/state"
+
+      # GitHub silently drops cron schedules on new repos. Until the schedule
+      # proves alive, each dispatched run re-dispatches the next one ~4 min later.
+      # - propagates only through workflow_dispatch runs (a working cron won't double up)
+      # - kill switch: set repo variable ODDSPULSE_CHAIN=off
+      # - if: always() so a failed sweep doesn't break the chain
+      - name: Keep-alive re-dispatch (cron fallback)
+        if: always() && github.event_name == 'workflow_dispatch' && vars.ODDSPULSE_CHAIN != 'off'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sleep 240
+          gh workflow run pulse.yml --repo "${{ github.repository }}"
