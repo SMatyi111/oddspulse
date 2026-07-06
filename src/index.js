@@ -1,6 +1,6 @@
 import { config } from "./config.js";
 import { sweepLiquidMarkets } from "./kalshi.js";
-import { updateAndDetect } from "./detect.js";
+import { updateAndDetect, commitAlerts } from "./detect.js";
 import { loadState, saveState } from "./state.js";
 import { formatAlert, broadcast, processCommands } from "./telegram.js";
 
@@ -25,6 +25,7 @@ if (firstRun) {
 }
 const top = alerts.slice(0, config.maxAlertsPerRun);
 const dropped = alerts.length - top.length;
+commitAlerts(state, top, now);
 
 if (dryRun || !config.telegramToken) {
   if (!dryRun) console.log("no TELEGRAM_BOT_TOKEN set; printing alerts instead:");

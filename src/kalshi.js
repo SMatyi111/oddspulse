@@ -43,6 +43,8 @@ export async function sweepLiquidMarkets(cfg) {
     pages++;
     for (const e of d.events || []) {
       if (cfg.excludedCategories.includes(e.category)) continue;
+      const series = e.series_ticker || "";
+      if (cfg.excludedSeriesPrefixes.some((p) => series.startsWith(p))) continue;
       for (const m of e.markets || []) {
         if (m.status !== "active") continue;
         const closeTs = Date.parse(m.close_time || "");

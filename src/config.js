@@ -27,6 +27,16 @@ export const config = {
   historyMaxMin: num("ODDSPULSE_HISTORY_MAX_MIN", 90),
   // Live sports odds swing constantly and would drown everything else out.
   excludedCategories: list("ODDSPULSE_EXCLUDED_CATEGORIES", ["Sports"]),
+  // Continuous-underlying price/temperature ladders re-alert mechanically on every
+  // wiggle of the underlying (BTC spot, nat gas, daily highs). That's price tracking,
+  // not event news — matched by series-ticker prefix.
+  excludedSeriesPrefixes: list("ODDSPULSE_EXCLUDED_SERIES_PREFIXES", [
+    "KXBTC", "KXETH", "KXSOL", "KXXRP", "KXDOGE",
+    "KXGOLD", "KXSILVER", "KXNATGAS", "KXBRENT", "KXWTI",
+    "KXNASDAQ", "KXINX", "KXHIGH", "KXLOWT",
+  ]),
+  // At most one alert per series per cycle, and a series stays quiet after alerting.
+  seriesCooldownMin: num("ODDSPULSE_SERIES_COOLDOWN_MIN", 120),
   telegramToken: process.env.TELEGRAM_BOT_TOKEN || "",
   // Optional public channel (e.g. @oddspulse); the bot must be an admin there.
   telegramChannel: process.env.TELEGRAM_CHANNEL || "",

@@ -12,6 +12,7 @@ export function loadState(path) {
     tgOffset: raw.tgOffset || 0,
     subscribers: raw.subscribers || {},
     markets: raw.markets || {},
+    seriesAlert: raw.seriesAlert || {},
   };
 }
 

@@ -17,10 +17,13 @@ for (const m of markets) cats[m.category] = (cats[m.category] || 0) + 1;
 console.log("by category:", JSON.stringify(cats));
 
 // Fabricate prior state: the 3 highest-volume MID-RANGE markets get shifted history
-// (mid-range so the ±15pp shift survives the 1–99% clamp), rest unchanged.
+// (mid-range so the ±15pp shift survives the 1–99% clamp; distinct series so the
+// per-series pick doesn't merge them), rest unchanged.
+const seenSeries = new Set();
 const byVol = [...markets]
   .filter((m) => m.prob >= 0.25 && m.prob <= 0.75)
-  .sort((a, b) => b.vol24 - a.vol24);
+  .sort((a, b) => b.vol24 - a.vol24)
+  .filter((m) => !seenSeries.has(m.series) && seenSeries.add(m.series));
 if (byVol.length < 3) throw new Error("fewer than 3 mid-range liquid markets — filters too tight?");
 const shifted = new Map([
   [byVol[0].ticker, -0.15],

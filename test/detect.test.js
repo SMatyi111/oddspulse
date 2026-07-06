@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { updateAndDetect, allowedByDedup } from "../src/detect.js";
+import { updateAndDetect, allowedByDedup, commitAlerts } from "../src/detect.js";
 
 const cfg = {
   movePp: 10,
@@ -8,12 +8,13 @@ const cfg = {
   historyMaxMin: 90,
   realertPp: 5,
   realertCooldownMin: 360,
+  seriesCooldownMin: 0, // disabled for market-level behavior tests
 };
 
 const MIN = 60_000;
 
-function mkt(ticker, prob, vol24 = 5000) {
-  return { ticker, title: `T ${ticker}`, sub: "", series: "KXTEST", category: "Politics", prob, vol24 };
+function mkt(ticker, prob, vol24 = 5000, series = `KX${ticker}`) {
+  return { ticker, title: `T ${ticker}`, sub: "", series, category: "Politics", prob, vol24 };
 }
 
 function freshState() {
@@ -60,12 +61,63 @@ test("dedup: no re-alert until it moves another realertPp", () => {
   updateAndDetect(state, [mkt("A", 0.3)], 0, cfg);
   let alerts = updateAndDetect(state, [mkt("A", 0.42)], 10 * MIN, cfg);
   assert.equal(alerts.length, 1);
+  commitAlerts(state, alerts, 10 * MIN);
   // +2pp more: suppressed even though window delta is still >= 10pp
   alerts = updateAndDetect(state, [mkt("A", 0.44)], 20 * MIN, cfg);
   assert.equal(alerts.length, 0);
   // +5pp beyond the last alerted price: fires again
   alerts = updateAndDetect(state, [mkt("A", 0.47)], 30 * MIN, cfg);
   assert.equal(alerts.length, 1);
+});
+
+test("uncommitted candidates (cut by cycle cap) stay eligible next cycle", () => {
+  const state = freshState();
+  updateAndDetect(state, [mkt("A", 0.3), mkt("B", 0.5)], 0, cfg);
+  const alerts = updateAndDetect(state, [mkt("A", 0.45), mkt("B", 0.65)], 10 * MIN, cfg);
+  assert.equal(alerts.length, 2);
+  commitAlerts(state, [alerts[0]], 10 * MIN); // only the first was actually sent
+  const next = updateAndDetect(
+    state,
+    [mkt("A", 0.45), mkt("B", 0.65)],
+    20 * MIN,
+    cfg,
+  );
+  assert.equal(next.length, 1);
+  assert.equal(next[0].ticker, alerts[1].ticker);
+});
+
+test("one alert per series per cycle: only the biggest sibling fires", () => {
+  const state = freshState();
+  const strikes = [
+    mkt("S1", 0.3, 5000, "KXLADDER"),
+    mkt("S2", 0.5, 5000, "KXLADDER"),
+  ];
+  updateAndDetect(state, strikes, 0, cfg);
+  const alerts = updateAndDetect(
+    state,
+    [mkt("S1", 0.41, 5000, "KXLADDER"), mkt("S2", 0.65, 5000, "KXLADDER")],
+    10 * MIN,
+    cfg,
+  );
+  assert.equal(alerts.length, 1);
+  assert.equal(alerts[0].ticker, "S2"); // 15pp beats 11pp
+});
+
+test("series cooldown: whole series stays quiet after an emitted alert", () => {
+  const cfg2 = { ...cfg, seriesCooldownMin: 120 };
+  const state = freshState();
+  updateAndDetect(state, [mkt("S1", 0.3, 5000, "KXLADDER")], 0, cfg2);
+  const first = updateAndDetect(state, [mkt("S1", 0.45, 5000, "KXLADDER")], 10 * MIN, cfg2);
+  assert.equal(first.length, 1);
+  commitAlerts(state, first, 10 * MIN);
+  // different market, same series, fresh big move 30 min later: suppressed
+  updateAndDetect(state, [mkt("S2", 0.5, 5000, "KXLADDER")], 30 * MIN, cfg2);
+  const during = updateAndDetect(state, [mkt("S2", 0.65, 5000, "KXLADDER")], 60 * MIN, cfg2);
+  assert.equal(during.length, 0);
+  // after the cooldown: same-series alerts fire again
+  updateAndDetect(state, [mkt("S2", 0.65, 5000, "KXLADDER")], 200 * MIN, cfg2);
+  const after = updateAndDetect(state, [mkt("S2", 0.8, 5000, "KXLADDER")], 220 * MIN, cfg2);
+  assert.equal(after.length, 1);
 });
 
 test("dedup: cooldown expiry re-allows alerts", () => {

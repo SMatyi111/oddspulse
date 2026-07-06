@@ -54,7 +54,6 @@ export function updateAndDetect(state, snapshot, now, cfg) {
           minutes: Math.max(1, Math.round((now - ref.ts) / 60_000)),
           vol24: m.vol24,
         });
-        entry.lastAlert = { ts: now, prob: m.prob };
       }
     }
 
@@ -75,5 +74,36 @@ export function updateAndDetect(state, snapshot, now, cfg) {
       Math.abs(b.deltaPp) * Math.log10(b.vol24 + 10) -
       Math.abs(a.deltaPp) * Math.log10(a.vol24 + 10),
   );
-  return alerts;
+
+  // A series stays quiet after alerting (a drifting underlying re-qualifies every
+  // cycle otherwise), and only its single biggest mover alerts per cycle (one real
+  // event moves all sibling strikes at once).
+  const cooldownMs = cfg.seriesCooldownMin * 60_000;
+  const seriesAlert = (state.seriesAlert ??= {});
+  const seriesSeen = new Set();
+  const picked = alerts.filter((a) => {
+    const key = a.series || a.ticker;
+    if (seriesSeen.has(key)) return false;
+    if (seriesAlert[key] && now - seriesAlert[key] < cooldownMs) return false;
+    seriesSeen.add(key);
+    return true;
+  });
+
+  // Prune stale series-cooldown entries so state doesn't grow forever.
+  for (const [key, ts] of Object.entries(seriesAlert)) {
+    if (now - ts >= cooldownMs) delete seriesAlert[key];
+  }
+
+  return picked;
+}
+
+// Record dedup anchors ONLY for alerts actually delivered — candidates cut by the
+// per-cycle cap must stay eligible to fire on a later cycle.
+export function commitAlerts(state, emitted, now) {
+  state.seriesAlert ??= {};
+  for (const a of emitted) {
+    const entry = state.markets[a.ticker];
+    if (entry) entry.lastAlert = { ts: now, prob: a.to };
+    state.seriesAlert[a.series || a.ticker] = now;
+  }
 }
