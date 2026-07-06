@@ -1,0 +1,17 @@
+{
+  "name": "oddspulse",
+  "version": "0.1.0",
+  "description": "Telegram alerts for sharp moves in prediction markets (Kalshi)",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test test/",
+    "dry-run": "node src/index.js --dry-run",
+    "integration": "node test/integration.mjs",
+    "start": "node src/index.js"
+  },
+  "license": "MIT"
+}
