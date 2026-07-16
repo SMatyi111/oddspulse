@@ -1,16 +1,69 @@
 const BASE = "https://api.elections.kalshi.com/trade-api/v2";
 
-async function fetchJson(url, tries = 3) {
-  for (let i = 0; i < tries; i++) {
-    const res = await fetch(url, { headers: { accept: "application/json" } });
-    if (res.ok) return res.json();
-    if (res.status === 429 || res.status >= 500) {
-      await new Promise((r) => setTimeout(r, 1000 * (i + 1) ** 2));
-      continue;
-    }
-    throw new Error(`Kalshi HTTP ${res.status} for ${url}`);
+const MAX_RETRY_AFTER_MS = 30_000;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function retryAfterMs(headers) {
+  const value = headers?.get?.("retry-after");
+  if (!value) return null;
+
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) {
+    return Math.min(Math.max(0, seconds * 1000), MAX_RETRY_AFTER_MS);
   }
-  throw new Error(`Kalshi: retries exhausted for ${url}`);
+
+  const retryAt = Date.parse(value);
+  if (Number.isFinite(retryAt)) {
+    return Math.min(Math.max(0, retryAt - Date.now()), MAX_RETRY_AFTER_MS);
+  }
+  return null;
+}
+
+function backoffMs(attempt) {
+  return 1000 * (attempt + 1) ** 2;
+}
+
+// Retries only transient failures. A sweep remains all-or-nothing: callers get an
+// error after the final failed page, so they never save partial market state.
+export async function fetchJson(
+  url,
+  { tries = 5, fetchImpl = globalThis.fetch, wait = sleep, logger = console } = {},
+) {
+  let lastError;
+  const maxAttempts = Math.max(1, tries);
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const res = await fetchImpl(url, { headers: { accept: "application/json" } });
+      if (res.ok) return await res.json();
+
+      const error = new Error(`Kalshi HTTP ${res.status} for ${url}`);
+      if (res.status !== 429 && res.status < 500) {
+        error.retryable = false;
+      } else {
+        error.retryAfterMs = retryAfterMs(res.headers);
+      }
+      throw error;
+    } catch (error) {
+      if (error?.retryable === false) throw error;
+
+      lastError = error;
+      if (attempt === maxAttempts - 1) break;
+
+      const delay = error?.retryAfterMs ?? backoffMs(attempt);
+      logger.warn(
+        `Kalshi retry ${attempt + 1}/${maxAttempts}: ${error?.message || "request failed"}; retrying in ${delay}ms`,
+      );
+      await wait(delay);
+    }
+  }
+
+  throw new Error(`Kalshi: retries exhausted after ${maxAttempts} attempts for ${url}`, {
+    cause: lastError,
+  });
 }
 
 // Yes-probability of a market: mid of bid/ask when the book is sane, else last trade.
