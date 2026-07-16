@@ -69,9 +69,15 @@ export async function processCommands(token, state) {
     const msg = u.message;
     if (!msg || !msg.text || !msg.chat) continue;
     const id = String(msg.chat.id);
-    const cmd = msg.text.trim().split(/[\s@]+/)[0].toLowerCase();
+    const [command, sourceArg] = msg.text.trim().split(/\s+/, 2);
+    const cmd = command.toLowerCase().split("@")[0];
     if (cmd === "/start") {
-      state.subscribers[id] = { since: Date.now() };
+      const source = (sourceArg || "").replace(/[^a-z0-9_-]/gi, "").slice(0, 32);
+      const prior = state.subscribers[id] || {};
+      state.subscribers[id] = {
+        since: prior.since || Date.now(),
+        ...(source ? { source } : prior.source ? { source: prior.source } : {}),
+      };
       await tg(token, "sendMessage", { chat_id: id, text: WELCOME, parse_mode: "HTML" });
     } else if (cmd === "/stop") {
       delete state.subscribers[id];
