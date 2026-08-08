@@ -8,7 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test test/detect.test.js",
+    "test": "node --test test/detect.test.js test/kalshi.test.js test/telegram.test.js",
     "dry-run": "node src/index.js --dry-run",
     "integration": "node test/integration.mjs",
     "start": "node src/index.js"

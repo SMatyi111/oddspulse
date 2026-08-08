@@ -20,7 +20,8 @@ OddsPulse watches every liquid market on [Kalshi](https://kalshi.com) (~4,000 ma
 
 ## Subscribe
 
-Message the bot on Telegram and send `/start`. *(Bot link coming with the public launch — watch this repo.)*
+- **[Start the OddsPulse bot](https://t.me/OddsPulseSMatyi111Bot?start=github)** — send `/start` for private alerts.
+- **[Follow @oddspulse](https://t.me/oddspulse)** — see public alerts before subscribing.
 
 ## Self-host
 
